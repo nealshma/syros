@@ -9,7 +9,10 @@ export const Route = createFileRoute("/")({
       { title: "Syros EV — Sound vs Silence" },
       { name: "description", content: "Less Noise. More Journey. The silent power of Syros EV." },
       { property: "og:title", content: "Syros EV — Sound vs Silence" },
-      { property: "og:description", content: "Less Noise. More Journey. The silent power of Syros EV." },
+      {
+        property: "og:description",
+        content: "Less Noise. More Journey. The silent power of Syros EV.",
+      },
     ],
   }),
   component: Index,
@@ -17,11 +20,8 @@ export const Route = createFileRoute("/")({
 
 const TRAFFIC_IMG = trafficAsset.url;
 const ROAD_IMG = roadAsset.url;
-const LEFT_VIDEO =
-  "https://cdn.pixelkart.ai/uploads/2026/june/19/creative_fe0cb530.mp4";
-const RIGHT_VIDEO =
-  "https://cdn.pixelkart.ai/uploads/2026/june/19/creative_aff2030f.mp4";
-
+const LEFT_VIDEO = "https://cdn.pixelkart.ai/uploads/2026/june/19/creative_fe0cb530.mp4";
+const RIGHT_VIDEO = "https://cdn.pixelkart.ai/uploads/2026/june/19/creative_85a1a3d9.mp4";
 
 type WaveProps = {
   count: number;
@@ -99,22 +99,12 @@ function SoundWave({
 function Index() {
   const [currentState, setCurrentState] = useState<number>(1);
   const [popupVisible, setPopupVisible] = useState(false);
-  const [soundOn, setSoundOn] = useState(true);
 
   const leftVideoRef = useRef<HTMLVideoElement | null>(null);
+  const rightVideoRef = useRef<HTMLVideoElement | null>(null);
   const userInteractedRef = useRef(false);
 
-  const audioRef = useRef<{
-    ctx: AudioContext;
-    chaosGain: GainNode;
-    peaceGain: GainNode;
-    masterGain: GainNode;
-    nodes: AudioNode[];
-  } | null>(null);
-
   useEffect(() => {
-    const a = ensureAudio();
-    a.ctx.resume().catch(() => {});
     const t1 = setTimeout(() => setCurrentState(2), 3000);
     return () => clearTimeout(t1);
   }, []);
@@ -122,13 +112,15 @@ function Index() {
   useEffect(() => {
     if (currentState === 2) {
       const t = setTimeout(() => setPopupVisible(true), 1200);
-      return () => clearTimeout(t);
+      const auto = setTimeout(() => goState3(), 4200);
+      return () => {
+        clearTimeout(t);
+        clearTimeout(auto);
+      };
     }
   }, [currentState]);
 
   const playVideoAudio = () => {
-    const a = ensureAudio();
-    if (a.ctx.state === "suspended") a.ctx.resume();
     if (leftVideoRef.current?.muted) {
       leftVideoRef.current.muted = false;
       leftVideoRef.current.play().catch(() => {});
@@ -153,8 +145,7 @@ function Index() {
     return () => evts.forEach((e) => document.removeEventListener(e, onGesture));
   }, []);
 
-  const leftWidth =
-    currentState === 1 ? 50 : currentState === 2 ? 75 : 0;
+  const leftWidth = currentState === 1 ? 50 : currentState === 2 ? 75 : 0;
   const rightWidth = 100 - leftWidth;
 
   const goState3 = () => {
@@ -163,200 +154,17 @@ function Index() {
     if (leftVideoRef.current) {
       leftVideoRef.current.muted = true;
     }
-  };
-
-  // Build the audio graph once
-  const ensureAudio = () => {
-    if (audioRef.current) return audioRef.current;
-    const AC =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext })
-        .webkitAudioContext;
-    const ctx = new AC();
-
-    const masterGain = ctx.createGain();
-    masterGain.gain.value = 0.6;
-    masterGain.connect(ctx.destination);
-
-    // ---- CHAOS BUS: filtered noise + low rumble + sporadic "horn" ----
-    const chaosGain = ctx.createGain();
-    chaosGain.gain.value = 0;
-    chaosGain.connect(masterGain);
-
-    // brown-ish noise buffer
-    const bufferSize = 2 * ctx.sampleRate;
-    const noiseBuf = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = noiseBuf.getChannelData(0);
-    let lastOut = 0;
-    for (let i = 0; i < bufferSize; i++) {
-      const white = Math.random() * 2 - 1;
-      lastOut = (lastOut + 0.02 * white) / 1.02;
-      data[i] = lastOut * 3.5;
+    if (rightVideoRef.current?.muted) {
+      rightVideoRef.current.muted = false;
+      rightVideoRef.current.play().catch(() => {});
     }
-    const noise = ctx.createBufferSource();
-    noise.buffer = noiseBuf;
-    noise.loop = true;
-    const noiseFilter = ctx.createBiquadFilter();
-    noiseFilter.type = "bandpass";
-    noiseFilter.frequency.value = 600;
-    noiseFilter.Q.value = 0.6;
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.value = 0.55;
-    noise.connect(noiseFilter);
-    noiseFilter.connect(noiseGain);
-    noiseGain.connect(chaosGain);
-    noise.start();
-
-    // low engine rumble
-    const rumble = ctx.createOscillator();
-    rumble.type = "sawtooth";
-    rumble.frequency.value = 55;
-    const rumbleLfo = ctx.createOscillator();
-    rumbleLfo.frequency.value = 0.3;
-    const rumbleLfoGain = ctx.createGain();
-    rumbleLfoGain.gain.value = 6;
-    rumbleLfo.connect(rumbleLfoGain);
-    rumbleLfoGain.connect(rumble.frequency);
-    const rumbleFilter = ctx.createBiquadFilter();
-    rumbleFilter.type = "lowpass";
-    rumbleFilter.frequency.value = 180;
-    const rumbleGain = ctx.createGain();
-    rumbleGain.gain.value = 0.18;
-    rumble.connect(rumbleFilter);
-    rumbleFilter.connect(rumbleGain);
-    rumbleGain.connect(chaosGain);
-    rumble.start();
-    rumbleLfo.start();
-
-    // sporadic car horn beeps
-    const horn = ctx.createOscillator();
-    horn.type = "square";
-    horn.frequency.value = 440;
-    const hornGain = ctx.createGain();
-    hornGain.gain.value = 0;
-    horn.connect(hornGain);
-    hornGain.connect(chaosGain);
-    horn.start();
-    const scheduleHorn = () => {
-      const now = ctx.currentTime;
-      const freq = 280 + Math.random() * 260;
-      horn.frequency.setValueAtTime(freq, now);
-      hornGain.gain.cancelScheduledValues(now);
-      hornGain.gain.setValueAtTime(0, now);
-      hornGain.gain.linearRampToValueAtTime(0.12, now + 0.05);
-      hornGain.gain.linearRampToValueAtTime(0, now + 0.35);
-    };
-    const hornTimer = window.setInterval(
-      () => Math.random() < 0.6 && scheduleHorn(),
-      1800,
-    );
-
-    // ---- PEACE BUS: soft pad of detuned sines + airy noise ----
-    const peaceGain = ctx.createGain();
-    peaceGain.gain.value = 0;
-    peaceGain.connect(masterGain);
-
-    const padFreqs = [110, 164.81, 220, 329.63]; // A2, E3, A3, E4
-    padFreqs.forEach((f, i) => {
-      const o = ctx.createOscillator();
-      o.type = "sine";
-      o.frequency.value = f;
-      const g = ctx.createGain();
-      g.gain.value = 0.08;
-      // slow tremolo
-      const lfo = ctx.createOscillator();
-      lfo.frequency.value = 0.15 + i * 0.05;
-      const lfoGain = ctx.createGain();
-      lfoGain.gain.value = 0.03;
-      lfo.connect(lfoGain);
-      lfoGain.connect(g.gain);
-      o.connect(g);
-      g.connect(peaceGain);
-      o.start();
-      lfo.start();
-    });
-
-    // gentle air noise
-    const airBuf = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const airData = airBuf.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) airData[i] = (Math.random() * 2 - 1) * 0.5;
-    const air = ctx.createBufferSource();
-    air.buffer = airBuf;
-    air.loop = true;
-    const airFilter = ctx.createBiquadFilter();
-    airFilter.type = "lowpass";
-    airFilter.frequency.value = 800;
-    const airGain = ctx.createGain();
-    airGain.gain.value = 0.06;
-    air.connect(airFilter);
-    airFilter.connect(airGain);
-    airGain.connect(peaceGain);
-    air.start();
-
-    audioRef.current = {
-      ctx,
-      chaosGain,
-      peaceGain,
-      masterGain,
-      nodes: [noise, rumble, rumbleLfo, horn, air],
-    };
-
-    // Tag the timer for cleanup via closure on unmount
-    (audioRef.current as unknown as { hornTimer: number }).hornTimer = hornTimer;
-
-    return audioRef.current;
   };
-
-  // Master on/off
-  useEffect(() => {
-    const a = audioRef.current;
-    if (!a) return;
-    const t = a.ctx.currentTime;
-    a.masterGain.gain.cancelScheduledValues(t);
-    a.masterGain.gain.linearRampToValueAtTime(soundOn ? 0.6 : 0, t + 0.4);
-  }, [soundOn]);
-
-  // Crossfade between chaos and peace based on state
-  useEffect(() => {
-    const a = audioRef.current;
-    if (!a) return;
-    const t = a.ctx.currentTime;
-    const chaos = currentState === 3 ? 0 : currentState === 2 ? 1.0 : 0.7;
-    const peace = currentState === 3 ? 1.0 : currentState === 2 ? 0.25 : 0.45;
-    a.chaosGain.gain.cancelScheduledValues(t);
-    a.peaceGain.gain.cancelScheduledValues(t);
-    a.chaosGain.gain.linearRampToValueAtTime(chaos, t + 1.0);
-    a.peaceGain.gain.linearRampToValueAtTime(peace, t + 1.0);
-  }, [currentState, soundOn]);
-
-  useEffect(() => {
-    return () => {
-      const a = audioRef.current;
-      if (!a) return;
-      const timer = (a as unknown as { hornTimer?: number }).hornTimer;
-      if (timer) window.clearInterval(timer);
-      a.ctx.close().catch(() => {});
-      audioRef.current = null;
-    };
-  }, []);
 
   const toggleSound = () => {
-    const a = ensureAudio();
-    if (a.ctx.state === "suspended") a.ctx.resume();
-    // Trigger the state-dependent gains for the first time
-    const t = a.ctx.currentTime;
-    const chaos = currentState === 3 ? 0 : currentState === 2 ? 1.0 : 0.7;
-    const peace = currentState === 3 ? 1.0 : currentState === 2 ? 0.25 : 0.45;
-    a.chaosGain.gain.setValueAtTime(chaos, t);
-    a.peaceGain.gain.setValueAtTime(peace, t);
-    setSoundOn((v) => {
-      const next = !v;
-      if (leftVideoRef.current) {
-        leftVideoRef.current.muted = !next;
-        if (next) leftVideoRef.current.play().catch(() => {});
-      }
-      return next;
-    });
+    if (leftVideoRef.current) {
+      leftVideoRef.current.muted = !leftVideoRef.current.muted;
+      if (!leftVideoRef.current.muted) leftVideoRef.current.play().catch(() => {});
+    }
   };
 
   return (
@@ -368,8 +176,7 @@ function Index() {
         background: "#000",
         overflow: "hidden",
         WebkitFontSmoothing: "antialiased",
-        fontFamily:
-          '"DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        fontFamily: '"DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       }}
     >
       <style>{`
@@ -424,8 +231,6 @@ function Index() {
           50% { transform: scaleY(1); }
         }
       `}</style>
-
-
 
       {/* LEFT PANEL — Chaos */}
       <div
@@ -610,6 +415,7 @@ function Index() {
         }}
       >
         <video
+          ref={rightVideoRef}
           src={RIGHT_VIDEO}
           autoPlay
           muted
@@ -692,8 +498,7 @@ function Index() {
             height: "100%",
             background: "#fff",
             zIndex: 4,
-            transition:
-              "left 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.4s ease",
+            transition: "left 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.4s ease",
             opacity: currentState === 3 ? 0 : 1,
           }}
         />
@@ -784,9 +589,7 @@ function Index() {
             >
               Discover Syros EV
             </button>
-            <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 18 }}>
-              |
-            </span>
+            <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 18 }}>|</span>
             <button
               className="sv-cta-ghost"
               style={{
