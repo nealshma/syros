@@ -100,6 +100,7 @@ function Index() {
   const [currentState, setCurrentState] = useState<number>(1);
   const [popupVisible, setPopupVisible] = useState(false);
 
+  const leftPanelRef = useRef<HTMLDivElement | null>(null);
   const leftVideoRef = useRef<HTMLVideoElement | null>(null);
   const rightVideoRef = useRef<HTMLVideoElement | null>(null);
   const userInteractedRef = useRef(false);
@@ -120,7 +121,13 @@ function Index() {
     }
   }, [currentState]);
 
-  const playVideoAudio = () => {
+  useEffect(() => {
+    if (currentState !== 3 || !rightVideoRef.current) return;
+    rightVideoRef.current.muted = false;
+    rightVideoRef.current.play().catch(() => {});
+  }, [currentState]);
+
+  const enableLeftVideoAudio = () => {
     if (leftVideoRef.current?.muted) {
       leftVideoRef.current.muted = false;
       leftVideoRef.current.play().catch(() => {});
@@ -128,16 +135,10 @@ function Index() {
   };
 
   useEffect(() => {
-    if (currentState === 2 && leftVideoRef.current) {
-      playVideoAudio();
-    }
-  }, [currentState]);
-
-  useEffect(() => {
     const onGesture = () => {
       if (!userInteractedRef.current) {
         userInteractedRef.current = true;
-        playVideoAudio();
+        enableLeftVideoAudio();
       }
     };
     const evts = ["pointerdown", "keydown", "wheel", "touchstart"];
@@ -154,8 +155,8 @@ function Index() {
     if (leftVideoRef.current) {
       leftVideoRef.current.muted = true;
     }
-    if (rightVideoRef.current?.muted) {
-      rightVideoRef.current.muted = false;
+    if (rightVideoRef.current) {
+      rightVideoRef.current.currentTime = 0;
       rightVideoRef.current.play().catch(() => {});
     }
   };
@@ -234,6 +235,7 @@ function Index() {
 
       {/* LEFT PANEL — Chaos */}
       <div
+        ref={leftPanelRef}
         style={{
           position: "absolute",
           top: 0,
@@ -249,6 +251,10 @@ function Index() {
           backgroundImage: `url('${TRAFFIC_IMG}')`,
           backgroundSize: "cover",
           backgroundPosition: "center",
+        }}
+        onTransitionEnd={(event) => {
+          if (currentState !== 2 || event.propertyName !== "width") return;
+          enableLeftVideoAudio();
         }}
       >
         <video
@@ -418,7 +424,7 @@ function Index() {
           ref={rightVideoRef}
           src={RIGHT_VIDEO}
           autoPlay
-          muted
+          muted={currentState !== 3}
           loop
           playsInline
           poster={ROAD_IMG}
