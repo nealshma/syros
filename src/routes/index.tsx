@@ -99,11 +99,11 @@ function SoundWave({
 function Index() {
   const [currentState, setCurrentState] = useState<number>(1);
   const [popupVisible, setPopupVisible] = useState(false);
+  const [leftAudioReady, setLeftAudioReady] = useState(false);
 
   const leftPanelRef = useRef<HTMLDivElement | null>(null);
   const leftVideoRef = useRef<HTMLVideoElement | null>(null);
   const rightVideoRef = useRef<HTMLVideoElement | null>(null);
-  const userInteractedRef = useRef(false);
 
   useEffect(() => {
     const t1 = setTimeout(() => setCurrentState(2), 3000);
@@ -127,24 +127,17 @@ function Index() {
     rightVideoRef.current.play().catch(() => {});
   }, [currentState]);
 
-  const enableLeftVideoAudio = () => {
-    if (leftVideoRef.current?.muted) {
-      leftVideoRef.current.muted = false;
-      leftVideoRef.current.play().catch(() => {});
-    }
-  };
+  useEffect(() => {
+    if (!leftVideoRef.current || currentState === 3) return;
+    leftVideoRef.current.muted = !leftAudioReady;
+    leftVideoRef.current.play().catch(() => {});
+  }, [currentState, leftAudioReady]);
 
   useEffect(() => {
-    const onGesture = () => {
-      if (!userInteractedRef.current) {
-        userInteractedRef.current = true;
-        enableLeftVideoAudio();
-      }
-    };
-    const evts = ["pointerdown", "keydown", "wheel", "touchstart"];
-    evts.forEach((e) => document.addEventListener(e, onGesture));
-    return () => evts.forEach((e) => document.removeEventListener(e, onGesture));
-  }, []);
+    if (currentState !== 2) {
+      setLeftAudioReady(false);
+    }
+  }, [currentState]);
 
   const leftWidth = currentState === 1 ? 50 : currentState === 2 ? 75 : 0;
   const rightWidth = 100 - leftWidth;
@@ -158,13 +151,6 @@ function Index() {
     if (rightVideoRef.current) {
       rightVideoRef.current.currentTime = 0;
       rightVideoRef.current.play().catch(() => {});
-    }
-  };
-
-  const toggleSound = () => {
-    if (leftVideoRef.current) {
-      leftVideoRef.current.muted = !leftVideoRef.current.muted;
-      if (!leftVideoRef.current.muted) leftVideoRef.current.play().catch(() => {});
     }
   };
 
@@ -254,24 +240,18 @@ function Index() {
         }}
         onTransitionEnd={(event) => {
           if (currentState !== 2 || event.propertyName !== "width") return;
-          enableLeftVideoAudio();
+          setLeftAudioReady(true);
         }}
       >
         <video
           ref={leftVideoRef}
           src={LEFT_VIDEO}
           autoPlay
-          muted
+          muted={!leftAudioReady}
           loop
           playsInline
           poster={TRAFFIC_IMG}
           preload="auto"
-          onClick={() => {
-            if (leftVideoRef.current) {
-              leftVideoRef.current.muted = false;
-              leftVideoRef.current.play().catch(() => {});
-            }
-          }}
           onError={(e) => console.error("Left video error:", e)}
           style={{
             position: "absolute",
